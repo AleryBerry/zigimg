@@ -71,6 +71,68 @@ pub fn crop(image: *const Image, allocator: std.mem.Allocator, crop_area: Box) E
     };
 }
 
+pub fn resize(image: *const Image, allocator: std.mem.Allocator, new_width: usize, new_height: usize) Error!Image {
+    const old_width = image.width;
+    const old_height = image.height;
+
+    const pixel_format = image.pixelFormat();
+    const bytes_per_pixel = pixel_format.pixelStride();
+
+    const original_data = image.pixels.asBytes();
+    const resized_pixels = try color.PixelStorage.init(
+        allocator,
+        pixel_format,
+        new_width * new_height,
+    );
+    const resized_data = resized_pixels.asBytes();
+
+    var y: usize = 0;
+    while (y < new_height) : (y += 1) {
+        var x: usize = 0;
+        while (x < new_width) : (x += 1) {
+            const gx: f32 = @as(f32, @floatFromInt(x)) / @as(f32, @floatFromInt(new_width)) * @as(f32, @floatFromInt(old_width));
+            const gy: f32 = @as(f32, @floatFromInt(y)) / @as(f32, @floatFromInt(new_height)) * @as(f32, @floatFromInt(old_height));
+
+            const gxi: usize = @intFromFloat(gx);
+            const gyi: usize = @intFromFloat(gy);
+
+            const xf: f32 = gx - @as(f32, @floatFromInt(gxi));
+            const yf: f32 = gy - @as(f32, @floatFromInt(gyi));
+
+            const x2: usize = @min(gxi + 1, old_width - 1);
+            const y2: usize = @min(gyi + 1, old_height - 1);
+
+            var c: usize = 0;
+            while (c < bytes_per_pixel) : (c += 1) {
+                const p1_idx = (gyi * old_width + gxi) * bytes_per_pixel + c;
+                const p2_idx = (gyi * old_width + x2) * bytes_per_pixel + c;
+                const p3_idx = (y2 * old_width + gxi) * bytes_per_pixel + c;
+                const p4_idx = (y2 * old_width + x2) * bytes_per_pixel + c;
+
+                const p1: f32 = @floatFromInt(original_data[p1_idx]);
+                const p2: f32 = @floatFromInt(original_data[p2_idx]);
+                const p3: f32 = @floatFromInt(original_data[p3_idx]);
+                const p4: f32 = @floatFromInt(original_data[p4_idx]);
+
+                const interpolated_value: f32 =
+                    p1 * (1 - xf) * (1 - yf) +
+                    p2 * xf * (1 - yf) +
+                    p3 * (1 - xf) * yf +
+                    p4 * xf * yf;
+
+                const dst_idx = (y * new_width + x) * bytes_per_pixel + c;
+                resized_data[dst_idx] = @intFromFloat(@max(0.0, @min(255.0, interpolated_value)));
+            }
+        }
+    }
+
+    return Image{
+        .width = new_width,
+        .height = new_height,
+        .pixels = resized_pixels,
+    };
+}
+
 /// A box describes the region of an image to be extracted. The crop
 /// box should be a subsection of the original image.
 ///

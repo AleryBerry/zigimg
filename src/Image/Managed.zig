@@ -147,6 +147,11 @@ pub fn crop(self: *const Managed, allocator: std.mem.Allocator, area: Image.Edit
     return (try Image.crop(@ptrCast(self), allocator, area)).toManaged(allocator);
 }
 
+/// Return a resized copy of an image.
+pub fn resize(self: *const Managed, allocator: std.mem.Allocator, new_width: usize, new_height: usize) Image.Editor.Error!Managed {
+    return (try Image.resize(@ptrCast(self), allocator, new_width, new_height)).toManaged(allocator);
+}
+
 /// Iterate the pixel in pixel-format agnostic way. In the case of an animation, it returns an iterator for the first frame. The iterator is read-only.
 pub fn iterator(self: *const Managed) color.PixelStorageIterator {
     return color.PixelStorageIterator.init(&self.pixels);
